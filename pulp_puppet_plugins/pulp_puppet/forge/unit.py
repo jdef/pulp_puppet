@@ -11,6 +11,8 @@
 # have received a copy of GPLv2 along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
+import re
+import string
 import json
 import logging
 import urlparse
@@ -249,16 +251,43 @@ class Unit(object):
             'dependencies' : self._deps_as_list,
         }
 
+    def versioncmp(self, version_a, version_b):
+        """
+        Apply the same logic that puppet uses to compare two version strings.
+        :param version_a:   module version A
+        :type  version_a:   str
+        :param version_b:   module version B
+        :type  version_b:   str
+        :return:            generally, what a "cmp"-style function returns
+        """
+      p = re.compile('[-.]|\d+|[^-.\d]+')
+      d = re.compile('^\d+$')
+      z = re.compile('^0')
+      ax = p.findall(version_a)
+      bx = p.findall(version_b)
+      for i in range(min(len(ax), len(bx))):
+        a = ax[i]
+        b = bx[i]
+        if( a == b )                 : continue
+        elif (a == '-' and b == '-') : continue
+        elif (a == '-')              : return -1
+        elif (b == '-')              : return 1
+        elif (a == '.' and b == '.') : continue
+        elif (a == '.' )             : return -1
+        elif (b == '.' )             : return 1
+        elif (d.search(a) and d.search(b)) :
+          if( z.search(a) or z.search(b) ) :
+            return cmp(str(a).upper(), str(b).upper())
+          return cmp(int(a), int(b))
+        else:
+          return cmp(a.upper(), b.upper())
+      return cmp(version_a, version_b)
+
     def __cmp__(self, other):
         """
-        Converts versions before doing the comparison. They are strings such as
-        "1.0.0", which we convert to a tuple of ints such as (1, 0, 0).
-
         :param other:   other Unit instance
         :type  other:   pulp_puppet.forge.unit.Unit
 
         :return:        whatever "cmp" returns
         """
-        my_version = map(int, self.version.split('.'))
-        other_version = map(int, other.version.split('.'))
-        return cmp(my_version, other_version)
+        return self.versioncmp( self.version, other.version )
